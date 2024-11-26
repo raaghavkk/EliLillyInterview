@@ -29,4 +29,10 @@ body {
     height: 30px;
 }
 
+.medicine-item {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin: 10px 0;
+}
+
 /* ---- Your custom styles below ---- */
