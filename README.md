@@ -85,7 +85,7 @@ Setup scripts are provided for Mac, Linux and Windows. You can run the appropria
 - You should be able to see the frontend by opening the `index.html` file in your browser. You can also use the browser's developer tools to debug the frontend code.
 
 ## Objectives
-- Fetch data from the backend server and send it to the the frontend, displaying it in a user-friendly way.
+- Fetch data from the backend server and send it to the the frontend, displaying it in a user-friendly way. (done)
 - A data engineer had some issues migrating data, leaving some gaps in our database. How can you ensure that the frontend handles missing/invalid data returned from the APIs without crashing?
 - You can send data to the backend via the available API(s), however it is not particularly user-friendly. How will you create a user-friendly solution that allows users to input data on the site and send it to the backend?
 - The frontend site's design leaves a lot to be desired. Can you make any improvements to the overall design and user experience? (this one is open-ended; feel free to be creative here!)

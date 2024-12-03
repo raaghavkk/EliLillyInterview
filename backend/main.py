@@ -1,26 +1,9 @@
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
-"""
-This module defines a FastAPI application for managing a list of medicines.
-It provides endpoints to retrieve all medicines, retrieve a single medicine by name,
-and create a new medicine.
-Endpoints:
-- GET /medicines: Retrieve all medicines from the data.json file.
-- GET /medicines/{name}: Retrieve a single medicine by name from the data.json file.
-- POST /create: Create a new medicine with a specified name and price.
-- POST /update: Update the price of a medicine with a specified name.
-- DELETE /delete: Delete a medicine with a specified name.
-Functions:
-- get_all_meds: Reads the data.json file and returns all medicines.
-- get_single_med: Reads the data.json file and returns a single medicine by name.
-- create_med: Reads the data.json file, adds a new medicine, and writes the updated data back to the file.
-- update_med: Reads the data.json file, updates the price of a medicine, and writes the updated data back to the file.
-- delete_med: Reads the data.json file, deletes a medicine, and writes the updated data back to the file.
-Usage:
-Run this module directly to start the FastAPI application.
-"""
+from typing import Optional
 import uvicorn
 import json
+import statistics
 
 app = FastAPI()
 
@@ -52,79 +35,147 @@ def get_single_med(name: str):
     Returns:
         dict: A dictionary containing the medicine details
     """
-    with open('data.json') as meds:
-        data = json.load(meds)
-        for med in data["medicines"]:
-            print(med)
-            if med['name'] == name:
-                return med
-    return {"error": "Medicine not found"}
+    try:
+        with open('data.json') as meds:
+            data = json.load(meds)
+            # Access the nested medicines array
+            medicines_list = data.get("medicines", [])
+            
+            for med in medicines_list:
+                if isinstance(med, dict) and med.get('name', '').lower() == name.lower():
+                    return med
+                    
+        raise HTTPException(status_code=404, detail="Medicine not found")
+            
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Error reading data file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/create")
-def create_med(name: str = Form(...), price: float = Form(...)):
+def create_med(name: str = Form(...), price: float = Form(...), description: Optional[str] = None):
     """
     This function creates a new medicine with the specified name and price.
-    It expects the name and price to be provided as form data.
-    Args:
-        name (str): The name of the medicine.
-        price (float): The price of the medicine.
-    Returns:
-        dict: A message confirming the medicine was created successfully.
     """
-    with open('data.json', 'r+') as meds:
-        current_db = json.load(meds)
-        new_med = {"name": name, "price": price}
-        current_db["medicines"].append(new_med)
-        meds.seek(0)
-        json.dump(current_db, meds)
-        meds.truncate()
-        
-    return {"message": f"Medicine created successfully with name: {name}"}
+    try:
+        with open('data.json', 'r+') as file:
+            data = json.load(file)
+            medicines_list = data.get("medicines", [])
+            
+            # Check if medicine already exists
+            if any(med.get('name', '').lower() == name.lower() for med in medicines_list):
+                raise HTTPException(status_code=400, detail="Medicine already exists")
+            
+            new_med = {
+                "name": name,
+                "price": price,
+                "description": description or ""
+            }
+            
+            # Append to medicines list
+            medicines_list.append(new_med)
+            data["medicines"] = medicines_list
+            
+            # Write back to file
+            file.seek(0)
+            json.dump(data, file, indent=4)
+            file.truncate()
+            
+            return new_med
+            
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Error reading data file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/update")
 def update_med(name: str = Form(...), price: float = Form(...)):
     """
     This function updates the price of a medicine with the specified name.
-    It expects the name and price to be provided as form data.
-    Args:
-        name (str): The name of the medicine.
-        price (float): The new price of the medicine.
-    Returns:
-        dict: A message confirming the medicine was updated successfully.
     """
-    with open('data.json', 'r+') as meds:
-        current_db = json.load(meds)
-        for med in current_db["medicines"]:
-            if med['name'] == name:
-                med['price'] = price
-                meds.seek(0)
-                json.dump(current_db, meds)
-                meds.truncate()
-                return {"message": f"Medicine updated successfully with name: {name}"}
-    return {"error": "Medicine not found"}
+    try:
+        with open('data.json', 'r+') as file:
+            data = json.load(file)
+            medicines_list = data.get("medicines", [])
+            
+            # Find and update medicine
+            for med in medicines_list:
+                if isinstance(med, dict) and med.get('name', '').lower() == name.lower():
+                    med['price'] = price
+                    file.seek(0)
+                    json.dump(data, file, indent=4)
+                    file.truncate()
+                    return med
+                    
+            raise HTTPException(status_code=404, detail="Medicine not found")
+            
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Error reading data file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/delete")
 def delete_med(name: str = Form(...)):
     """
     This function deletes a medicine with the specified name.
-    It expects the name to be provided as form data.
-    Args:
-        name (str): The name of the medicine to delete.
-    Returns:
-        dict: A message confirming the medicine was deleted successfully.
     """
-    with open('data.json', 'r+') as meds:
-        current_db = json.load(meds)
-        for med in current_db["medicines"]:
-            if med['name'] == name:
-                current_db["medicines"].remove(med)
-                meds.seek(0)
-                json.dump(current_db, meds)
-                meds.truncate()
-                return {"message": f"Medicine deleted successfully with name: {name}"}
-    return {"error": "Medicine not found"}
+    try:
+        with open('data.json', 'r+') as file:
+            data = json.load(file)
+            medicines_list = data.get("medicines", [])
+            initial_length = len(medicines_list)
+            
+            # Filter out medicine to delete
+            updated_list = [med for med in medicines_list 
+                          if isinstance(med, dict) and med.get('name', '').lower() != name.lower()]
+            
+            if len(updated_list) == initial_length:
+                raise HTTPException(status_code=404, detail="Medicine not found")
+                
+            # Update medicines list
+            data["medicines"] = updated_list
+            file.seek(0)
+            json.dump(data, file, indent=4)
+            file.truncate()
+            
+            return {"message": "Medicine deleted"}
+            
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Error reading data file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-# Add your average function here
+@app.get("/average-price")
+def get_average_price():
+    """
+    Calculate average price of all medicines
+    """
+    try:
+        with open('data.json') as file:
+            data = json.load(file)
+            medicines_list = data.get("medicines", [])
+            
+            if not medicines_list:
+                raise HTTPException(status_code=404, detail="No medicines found")
+                
+            # Filter out invalid prices and calculate average
+            valid_prices = [med['price'] for med in medicines_list 
+                          if isinstance(med, dict) and 
+                          med.get('price') is not None and 
+                          isinstance(med.get('price'), (int, float))]
+            
+            if not valid_prices:
+                raise HTTPException(status_code=404, detail="No valid prices found")
+                
+            return {
+                "average_price": statistics.mean(valid_prices),
+                "total_medicines": len(valid_prices)
+            }
+            
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Error reading data file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
